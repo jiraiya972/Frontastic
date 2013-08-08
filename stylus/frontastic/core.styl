@@ -1,0 +1,182 @@
+// Vars and Functions
+// =============================================================================
+
+$breakpoint-list = unquote($breakpoint-list)
+$current-bp = 0 // init breakpoint variable
+
+// converting px to em
+em($px, $base: $base-font-size) 
+  ($px / $base) * 1em
+
+// column widths in em for elements with .grid-cell class
+// pass false as a second argument to remove the built in gutter (for creating height measurements)
+column($col, $gutter = true)
+  if $gutter
+    $col * ( em($grid-column + $grid-gutter) ) 
+  else 
+    $col * ( em($grid-column + $grid-gutter) ) - em($grid-gutter) 
+
+
+// column widths in % for elements with .grid-cell class
+// pass a second argument for overriding the number of available columns when calculating the percentage
+column-percentage($col, $avail = $current-bp)
+  (100% / $avail) * $col
+
+// column widths in px
+// good old pixel, not encourage to use, but can be handy when relative units just won't do 
+@function column-pixel($col, $gutter = true)
+  if $gutter 
+    ($grid-column *$col) + ($grid-gutter * $col)
+  else 
+    $grid-column * $col + $grid-gutter * ($col - 1)
+
+
+
+// Javascript hook for current breakpoint label
+// =============================================================================
+
+@media (min-width: 0px)
+  body::before
+    content "{nth($breakpoint-list, 1)}"
+    display none
+
+
+
+// Breakpoint mixin
+// =============================================================================
+
+breakpoint($min = false, $max = false, $label = false, $orientation = false, $wrapper = true, $resolution = false)
+
+  // set warnings if arguments are invalid
+  if $min is false and $max is false and $label is false and $orientation is false and $wrapper is true and $resolution is false 
+    warn("breakpoint requires you to pass some kind of argument. It can't read your mind. :)")
+  
+  if $min is 0 and $max is false and $label is false and $orientation is false and $wrapper is true and $resolution is false
+    warn("If you pass zero as a minimum you need to specify a max column value.")
+
+  // set current breakpoint for fluid function
+  $current-bp = $min
+
+  // min width mq
+  if $min and $max is false
+    if $min > 0
+      // create min width mq
+      // can we remove duplication of code here?
+      if $orientation
+        @media (min-width (column($min) + em($grid-gutter)) * ($base-font-size / 16px) ) and ( orientation $orientation )
+          breakpoint-extras($min, $wrapper, $label, $grid-overlay)
+            content
+      else
+        @media ( min-width: (column($min) + em($grid-gutter)) * ($base-font-size / 16px) ) {
+          breakpoint-extras($min, $wrapper, $label, $grid-overlay)
+            content
+
+      // ie fallback
+      if $ie-support and $min <= $ie-support and $orientation is false 
+        .lt-ie9
+          breakpoint-extras($min, $wrapper, $label: false, $grid-overlay: false)
+            content
+
+  // max width mq
+  if $max
+    // create max only mq
+    if $min is 0 or $min is false
+      if $orientation
+        @media ( max-width: column($max) + em($grid-gutter) * ($base-font-size / 16px) ) and ( orientation: $orientation )
+          content
+      else 
+        @media ( max-width: column($max) + em($grid-gutter) * ($base-font-size / 16px) )
+          content
+    // create min and max mq
+    else
+      if $orientation
+        @media ( min-width: column($min) + em($grid-gutter) * ($base-font-size / 16px) ) and ( max-width: column($max) + em($grid-gutter) ) and ( orientation: $orientation )
+          content
+      else
+        @media ( min-width: column($min) + em($grid-gutter) * ($base-font-size / 16px) ) and ( max-width: column($max) + em($grid-gutter) )
+          content
+  
+  // orientation only mq
+  if $min is false and $max is false
+    if $orientation
+      @media ( orientation: $orientation )
+        content
+
+  // pixel ratio mq
+  if $resolution
+    // warn if invalid value
+    if $resolution != 'high' and $resolution != 'low'
+      warn("$resolution only supports values of 'high' or 'low'")
+    if $resolution is 'high'
+      @media (-webkit-min-device-pixel-ratio: 1.5), (min-resolution: 144dpi)
+        content
+    if $resolution is 'low'
+      @media (-webkit-max-device-pixel-ratio: 1.5), (max-resolution: 144dpi)
+        content
+      
+    // ie fallback
+    if $ie-support and $resolution is 'low'
+      .lt-ie9
+        content
+
+// private mixin for generating extras in a min width mq
+breakpoint-extras($min, $wrapper, $label, $grid-overlay)
+  if $grid-overlay
+    grid-overlay($min)
+
+  // create hook for js
+  if $label
+    // label current breakpoint
+    body::before 
+      content $label
+
+    // push label to label list names = push(names, myname)
+    $breakpoint-list append($breakpoint-list, unquote($label), comma)
+    
+  // proper sizing of wrapper
+  if $wrapper
+    .wrapper
+      width: column($min) - em($grid-gutter)
+
+  content
+
+// Grid overlay
+// =============================================================================
+
+grid-overlay($col = false)
+  .grid-overlay
+    position fixed
+    top 0
+    bottom 0
+    pointer-events none
+    z-index 10000
+
+    $overlay-color = transparentize(green, .8)
+    background -webkit-linear-gradient(left, transparent $grid-gutter, $overlay-color $grid-gutter, $overlay-color $grid-gutter + $grid-column)
+    background -moz-linear-gradient(left, transparent $grid-gutter, $overlay-color $grid-gutter, $overlay-color $grid-gutter + $grid-column)
+    background -o-linear-gradient(left, transparent $grid-gutter, $overlay-color $grid-gutter, $overlay-color $grid-gutter + $grid-column)
+    background linear-gradient(left, transparent $grid-gutter, $overlay-color $grid-gutter, $overlay-color $grid-gutter + $grid-column)
+
+    if $col
+      left: 50%
+      width column($col) + em($grid-gutter)
+      margin-left column($col) / -2 - (em($grid-gutter)/2)
+      -webkit-background-size $grid-gutter + $grid-column
+      -moz-background-size $grid-gutter + $grid-column
+      -o-background-size $grid-gutter + $grid-column
+      background-size $grid-gutter + $grid-column
+    else
+      left 0
+      right $grid-gutter
+      -webkit-background-size 25%
+      -moz-background-size 25%
+      -o-background-size 25%
+      background-size 25%
+
+if $grid-overlay
+  grid-overlay()
+
+if $grid-lines
+  .baseline-overlay
+    baseline-grid-background($base-line-height, transparentize(black, .8))
+    z-index:1000
